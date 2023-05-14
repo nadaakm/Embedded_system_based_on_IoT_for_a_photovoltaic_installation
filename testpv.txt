@@ -1,0 +1,269 @@
+
+
+#include <SPIFFS.h>
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+
+
+
+const char *ssid = "Redmi";
+const char *password = "Nada1998";
+
+const int led =27; ////LED_BUILTIN;////27 regulateur
+const int led1 = 14;/// relais
+const float capteurtensionpv = 33;
+const float capteurtensionbat = 35;
+const float capteurcourantpv = 32;
+const float capteurcourantbat = 34;
+const float capteurluminosite = 39;
+const float capteurtemperature= 36;
+AsyncWebServer server(80);
+
+void setup()
+{
+  //----------------------------------------------------Serial
+  Serial.begin(115200);
+  Serial.println("\n");
+
+  //----------------------------------------------------GPIO
+  pinMode(led, OUTPUT);
+  pinMode(led1, OUTPUT);
+  digitalWrite(led, LOW);
+  pinMode(capteurtensionpv, INPUT);
+  pinMode(capteurtensionbat, INPUT);
+  pinMode(capteurcourantpv, INPUT);
+  pinMode(capteurcourantbat, INPUT);
+  pinMode(capteurtemperature, INPUT);
+  pinMode(capteurluminosite, INPUT);
+  pinMode(15,OUTPUT);
+  pinMode(2,OUTPUT);
+  pinMode(8,OUTPUT);
+  pinMode(4,OUTPUT);
+
+   
+  //----------------------------------------------------SPIFFS
+  if(!SPIFFS.begin())
+  {
+    Serial.println("Erreur SPIFFS...");
+    return;
+  }
+
+  File root = SPIFFS.open("/");
+  File file = root.openNextFile();
+
+  while(file)
+  {
+    Serial.print("File: ");
+    Serial.println(file.name());
+    file.close();
+    file = root.openNextFile();
+  }
+
+  //----------------------------------------------------WIFI
+  WiFi.begin(ssid, password);
+  Serial.print("Tentative de connexion...");
+  
+  while(WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print(".");
+    delay(100);
+  }
+  
+  Serial.println("\n");
+  Serial.println("Connexion etablie!");
+ Serial.print("Adresse IP: ");
+  Serial.println(WiFi.localIP());
+
+  //----------------------------------------------------SERVER
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    request->send(SPIFFS, "/essainad.html", "text/html");
+  });
+
+  server.on("/ESP32_style.css", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    request->send(SPIFFS, "/ESP32_style.css", "text/css");
+  });
+
+  server.on("/iot.jpg", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    request->send(SPIFFS, "/iot.jpg", "image/jpg");
+  });
+    server.on("/jsesaainad.js", HTTP_GET, [](AsyncWebServerRequest *request)
+    {
+    request->send(SPIFFS, "/jsesaainad.js", "text/javascript");
+  });
+//----------------------------------------------------commande regulateur
+ server.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    digitalWrite(led, HIGH);
+    request->send(200);
+  });
+
+  server.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    digitalWrite(led, LOW);
+    request->send(200);
+  });
+ //-----------------------------------------------------commande relais 
+  server.on("/on1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    digitalWrite(led1, HIGH);
+    request->send(200);
+  });
+
+  server.on("/off1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    digitalWrite(led1, LOW);
+    request->send(200);
+  });
+  
+    
+//------------------------------------capteur de tension pv
+
+server.on("/liretensionpv", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+   
+float x= analogRead(capteurtensionpv);
+Serial.println(x); 
+float van = (x*2.93)/3520;
+ float tpv= van/0.097;
+Serial.println("voltagepv is");
+Serial.println(tpv);
+      
+    String tensionpv = String(tpv);
+    request->send(200, "text/plain", tensionpv);
+    
+  });
+
+
+  
+///--------------------------- capteur de courant pv
+
+
+server.on("/lirecourantpv", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+float xc= analogRead(capteurcourantpv );
+float x1c=(xc*2.669)/3394;
+Serial.println(x1c);
+float x2c=x1c-2.5;
+float current=(abs(x2c/0.185));
+//Serial.print("\t currentpv is  = ");
+//Serial.println(current);
+
+    
+    String courantpv = String(current);
+    request->send(200, "text/plain", courantpv);
+  });
+
+
+  
+//------------------------ capteur de tension batterie
+
+
+
+server.on("/liretensionbat", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    float xbat= analogRead(capteurtensionbat); 
+float vanbat = (xbat*2.93)/3520;
+ float tbat= vanbat/0.097;
+Serial.println("voltage is");
+Serial.println(tbat);
+      
+    String tensionbat = String(tbat);
+    request->send(200, "text/plain", tensionbat);
+
+if (tbat<4.5){
+ digitalWrite (15,HIGH);
+  delay(1000);
+}
+if (tbat>=4.5 and tbat<7.5){
+  digitalWrite (2,HIGH);
+  delay(1000);
+
+}
+if (tbat>=7.5 and tbat<10.5){
+  digitalWrite (8,HIGH);
+  delay(1000);
+
+}
+if (tbat>=10.5){
+  digitalWrite (4,HIGH);
+  delay(1000);
+
+}
+
+  
+  });
+
+
+  
+//----------------------capteur de courant batterie   
+
+
+server.on("/lirecourantbat", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+   float xcbat= analogRead(capteurcourantbat );
+float x1cbat=(xcbat*2.669)/3394;
+float x2cbat=x1cbat-2.5;
+float currentbat=(abs(x2cbat/0.185));
+Serial.print("\t currentbat is  = ");
+Serial.println(currentbat);
+
+    
+    String courantbat = String(currentbat);
+    request->send(200, "text/plain", courantbat);
+  });
+
+
+  //--------------------------capteur de temperature 
+
+
+
+server.on("/liretemp", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+
+
+    float val = analogRead(capteurtemperature);
+      Serial.println(val);
+    float temp=((val*5000)/4095)/100;
+    String temperature = String(temp);
+    request->send(200, "text/plain", temperature);
+  });
+
+//----------------------capteur de luminositè  
+
+ 
+
+server.on("/lirelum", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+      int val = analogRead(capteurluminosite);
+    
+    if(val<2000){
+      String y= "la nuit";
+      String lum= String(y);
+    request->send(200, "text/plain", lum);
+      }       
+  
+  
+    if(val>2000){
+      String y= "le jour";
+      String lum = String(y);
+    request->send(200, "text/plain", lum);
+      }       
+  
+  });
+
+
+
+
+
+///-------------------------server begin
+  server.begin();
+  Serial.println("Serveur actif!");
+}
+
+void loop()
+{
+
+}
